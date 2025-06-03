@@ -1,18 +1,39 @@
 <?php
-require_once MACP_PLUGIN_DIR . 'includes/html/utils/class-macp-html-patterns.php';
-require_once MACP_PLUGIN_DIR . 'includes/html/processors/class-macp-script-style-processor.php';
-require_once MACP_PLUGIN_DIR . 'includes/html/processors/class-macp-attribute-processor.php';
+use voku\helper\HtmlMin;
 
 class MACP_Minify_HTML {
     private static $instance = null;
-    private $script_style_processor;
-    private $attribute_processor;
-    private $patterns;
+    private $minifier;
+    private $cache_dir;
 
     public function __construct() {
-        $this->script_style_processor = new MACP_Script_Style_Processor();
-        $this->attribute_processor = new MACP_Attribute_Processor();
-        $this->patterns = MACP_HTML_Patterns::get_patterns();
+        $this->minifier = new HtmlMin();
+        $this->configure_minifier();
+        $this->cache_dir = WP_CONTENT_DIR . '/cache/min/';
+        $this->ensure_cache_directory();
+    }
+
+    private function ensure_cache_directory() {
+        if (!file_exists($this->cache_dir)) {
+            wp_mkdir_p($this->cache_dir);
+        }
+    }
+
+    private function configure_minifier() {
+        $this->minifier
+            ->doOptimizeViaHtmlDomParser(true)
+            ->doRemoveComments(true)
+            ->doSumUpWhitespace(true)
+            ->doRemoveWhitespaceAroundTags(true)
+            ->doOptimizeAttributes(true)
+            ->doRemoveHttpPrefixFromAttributes(true)
+            ->doRemoveDefaultAttributes(true)
+            ->doRemoveEmptyAttributes(true)
+            ->doRemoveValueFromEmptyInput(true)
+            ->doSortCssClassNames(true)
+            ->doSortHtmlAttributes(true)
+            ->doRemoveSpacesBetweenTags(true)
+            ->doKeepBrokenHtml(true);
     }
 
     public static function get_instance() {
@@ -23,66 +44,52 @@ class MACP_Minify_HTML {
     }
 
     public function minify($html) {
-        if (empty($html)) {
+        if (empty($html)) return $html;
+
+        try {
+            // Preserve conditional comments and scripts
+            $preserved = $this->preserve_content($html);
+            
+            // Minify HTML
+            $minified = $this->minifier->minify($html);
+            
+            // Restore preserved content
+            $minified = $this->restore_content($minified, $preserved);
+            
+            return $minified;
+        } catch (Exception $e) {
+            error_log('MACP HTML Minification Error: ' . $e->getMessage());
             return $html;
         }
-
-        // Save preserved content
-        $preserved = $this->preserve_content($html);
-
-        // Process scripts and styles
-        $html = $this->script_style_processor->process($html);
-
-        // Process attributes
-        $html = $this->attribute_processor->process($html);
-
-        // Remove comments (except IE conditionals)
-        foreach ($this->patterns['comments'] as $pattern) {
-            $html = preg_replace($pattern, '', $html);
-        }
-
-        // Process whitespace
-        foreach ($this->patterns['whitespace'] as $pattern => $replacement) {
-            $html = preg_replace($pattern, $replacement, $html);
-        }
-
-        // Restore preserved content
-        $html = $this->restore_content($html, $preserved);
-
-        return trim($html);
     }
 
     private function preserve_content($html) {
         $preserved = [];
-
+        
         // Preserve conditional comments
-        if (preg_match_all($this->patterns['preserve']['conditional'], $html, $matches)) {
-            foreach ($matches[0] as $i => $match) {
-                $preserved['%%CONDITIONAL' . $i . '%%'] = $match;
-                $html = str_replace($match, '%%CONDITIONAL' . $i . '%%', $html);
-            }
-        }
+        $html = preg_replace_callback('/<!--\[if[^\]]*\]>.*?<!\[endif\]-->/is', 
+            function($matches) use (&$preserved) {
+                $key = '<!--PRESERVED' . count($preserved) . '-->';
+                $preserved[$key] = $matches[0];
+                return $key;
+            }, 
+            $html
+        );
 
-        // Preserve pre, textarea, scripts, and styles
-        if (preg_match_all($this->patterns['preserve']['pre'], $html, $matches)) {
-            foreach ($matches[0] as $i => $match) {
-                $preserved['%%PRESERVED' . $i . '%%'] = $match;
-                $html = str_replace($match, '%%PRESERVED' . $i . '%%', $html);
-            }
-        }
+        // Preserve scripts
+        $html = preg_replace_callback('/<script\b[^>]*>.*?<\/script>/is',
+            function($matches) use (&$preserved) {
+                $key = '<!--PRESERVED' . count($preserved) . '-->';
+                $preserved[$key] = $matches[0];
+                return $key;
+            },
+            $html
+        );
 
-        // Preserve data and event attributes
-        if (preg_match_all($this->patterns['preserve']['attributes'], $html, $matches)) {
-            foreach ($matches[1] as $i => $match) {
-                $preserved['%%ATTRIBUTE' . $i . '%%'] = $match;
-                $html = str_replace($match, '%%ATTRIBUTE' . $i . '%%', $html);
-            }
-        }
-
-        return $preserved;
+        return ['html' => $html, 'preserved' => $preserved];
     }
 
-    private function restore_content($html, $preserved) {
-        return strtr($html, $preserved);
+    private function restore_content($html, $data) {
+        return strtr($html, $data['preserved']);
     }
 }

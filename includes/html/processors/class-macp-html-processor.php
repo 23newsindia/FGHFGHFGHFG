@@ -7,7 +7,7 @@ class MACP_HTML_Processor {
     private $options;
 
     public function __construct() {
-        $this->minifier = new MACP_HTML_Minifier();
+        $this->minifier = MACP_Minify_HTML::get_instance();
         $this->options = [
             'minify_html' => get_option('macp_minify_html', 0),
             'minify_css' => get_option('macp_minify_css', 0),

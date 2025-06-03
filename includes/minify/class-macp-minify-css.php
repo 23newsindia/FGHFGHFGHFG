@@ -1,17 +1,27 @@
 <?php
-// Use plugin constant for proper path resolution
-require_once MACP_PLUGIN_DIR . 'includes/css/utils/class-macp-css-patterns.php';
-require_once MACP_PLUGIN_DIR . 'includes/css/utils/class-macp-media-query-processor.php';
-require_once MACP_PLUGIN_DIR . 'includes/css/utils/class-macp-font-awesome-processor.php';
+use MatthiasMullie\Minify\CSS;
 
 class MACP_Minify_CSS {
     private static $instance = null;
-    private $media_processor;
-    private $fa_processor;
+    private $minifier;
+    private $cache_dir;
     
     public function __construct() {
-        $this->media_processor = new MACP_Media_Query_Processor();
-        $this->fa_processor = new MACP_Font_Awesome_Processor();
+        $this->minifier = new CSS();
+        $this->cache_dir = WP_CONTENT_DIR . '/cache/min/';
+        $this->ensure_cache_directory();
+    }
+    
+    private function ensure_cache_directory() {
+        if (!file_exists($this->cache_dir)) {
+            wp_mkdir_p($this->cache_dir);
+            file_put_contents($this->cache_dir . '.htaccess', 
+                "Options -Indexes\n" .
+                "<IfModule mod_headers.c>\n" .
+                "    Header set Cache-Control 'max-age=31536000, public'\n" .
+                "</IfModule>"
+            );
+        }
     }
     
     public static function get_instance() {
@@ -24,39 +34,46 @@ class MACP_Minify_CSS {
     public function minify($css) {
         if (empty($css)) return $css;
 
-        // Process Font Awesome specific rules
-        $css = $this->fa_processor->process($css);
-
-        // Process media queries
-        $css = $this->media_processor->process($css);
-
-        // Apply all minification patterns
-        $patterns = MACP_CSS_Patterns::get_patterns();
-
-        // Remove comments
-        foreach ($patterns['comments'] as $pattern) {
-            $css = preg_replace($pattern, '', $css);
+        try {
+            $this->minifier->add($css);
+            $minified = $this->minifier->minify();
+            
+            // Additional optimizations
+            $minified = $this->optimize_font_weights($minified);
+            $minified = $this->optimize_zeros($minified);
+            $minified = $this->optimize_colors($minified);
+            
+            return $minified;
+        } catch (Exception $e) {
+            error_log('MACP CSS Minification Error: ' . $e->getMessage());
+            return $css;
         }
+    }
 
-        // Process whitespace
-        foreach ($patterns['whitespace'] as $pattern => $replacement) {
-            $css = preg_replace($pattern, $replacement, $css);
-        }
+    private function optimize_font_weights($css) {
+        return preg_replace('/font-weight:\s*normal;/i', 'font-weight:400;', $css);
+    }
 
-        // Process numbers
-        foreach ($patterns['numbers'] as $pattern => $replacement) {
-            $css = preg_replace($pattern, $replacement, $css);
-        }
+    private function optimize_zeros($css) {
+        $patterns = [
+            '/(?<!\\\\)0px/' => '0',
+            '/(?<!\\\\)0em/' => '0',
+            '/(?<!\\\\)0rem/' => '0',
+            '/(?<!\\\\)0%/' => '0',
+            '/:\s*0 0 0 0;/' => ':0;',
+            '/:\s*0 0 0;/' => ':0;',
+            '/:\s*0 0;/' => ':0;'
+        ];
+        return preg_replace(array_keys($patterns), array_values($patterns), $css);
+    }
 
-        // Process colors
-        foreach ($patterns['colors'] as $pattern => $replacement) {
-            $css = preg_replace($pattern, $replacement, $css);
-        }
-
-        // Final cleanup
-        $css = preg_replace('/[^}]+{\s*}/', '', $css); // Remove empty rules
-        $css = preg_replace('/;}/', '}', $css); // Remove last semicolon
-        
-        return trim($css);
+    private function optimize_colors($css) {
+        $patterns = [
+            '/(?<!\\\\)#([a-f0-9])\\1([a-f0-9])\\2([a-f0-9])\\3/i' => '#$1$2$3',
+            '/(?<!\\\\)rgb\\(([0-9]+),\\s*([0-9]+),\\s*([0-9]+)\\)/' => function($match) {
+                return sprintf('#%02x%02x%02x', $match[1], $match[2], $match[3]);
+            }
+        ];
+        return preg_replace_callback_array($patterns, $css);
     }
 }

@@ -33,11 +33,10 @@ require_once MACP_PLUGIN_DIR . 'includes/redis/class-macp-redis-status.php';
 require_once MACP_PLUGIN_DIR . 'includes/redis/class-macp-redis-primer.php';
 require_once MACP_PLUGIN_DIR . 'includes/class-macp-redis.php';
 
-// Load CSS optimization classes
-require_once MACP_PLUGIN_DIR . 'includes/css/utils/class-macp-css-patterns.php';
-require_once MACP_PLUGIN_DIR . 'includes/css/utils/class-macp-media-query-processor.php';
-require_once MACP_PLUGIN_DIR . 'includes/css/utils/class-macp-font-awesome-processor.php';
-require_once MACP_PLUGIN_DIR . 'includes/css/class-macp-css-minifier.php';
+// Load minification classes
+require_once MACP_PLUGIN_DIR . 'includes/minify/class-macp-minify-css.php';
+require_once MACP_PLUGIN_DIR . 'includes/minify/class-macp-minify-js.php';
+require_once MACP_PLUGIN_DIR . 'includes/minify/class-macp-minify-html.php';
 
 // Load metrics classes
 require_once MACP_PLUGIN_DIR . 'includes/metrics/class-macp-metrics-collector.php';
@@ -48,12 +47,6 @@ require_once MACP_PLUGIN_DIR . 'includes/metrics/class-macp-metrics-recorder.php
 // Load core functionality classes
 require_once MACP_PLUGIN_DIR . 'includes/class-macp-cache-helper.php';
 require_once MACP_PLUGIN_DIR . 'includes/class-macp-html-cache.php';
-
-// Load minification classes
-require_once MACP_PLUGIN_DIR . 'includes/minify/class-macp-html-minifier.php';
-require_once MACP_PLUGIN_DIR . 'includes/minify/class-macp-minify-css.php';
-require_once MACP_PLUGIN_DIR . 'includes/minify/class-macp-minify-js.php';
-require_once MACP_PLUGIN_DIR . 'includes/minify/class-macp-minify-html.php';
 
 // Load JavaScript optimization classes
 require_once MACP_PLUGIN_DIR . 'includes/js/class-macp-script-attributes.php';
@@ -95,8 +88,6 @@ require_once MACP_PLUGIN_DIR . 'includes/class-macp-plugin.php';
 
 // Load AJAX handlers
 require_once MACP_PLUGIN_DIR . 'includes/ajax/class-macp-css-test-ajax.php';
-
-
 
 // Initialize the plugin
 function MACP() {

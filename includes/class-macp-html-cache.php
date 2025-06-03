@@ -4,6 +4,8 @@ require_once MACP_PLUGIN_DIR . 'includes/class-macp-filesystem.php';
 require_once MACP_PLUGIN_DIR . 'includes/class-macp-url-helper.php';
 require_once MACP_PLUGIN_DIR . 'includes/class-macp-cache-helper.php';
 require_once MACP_PLUGIN_DIR . 'includes/metrics/class-macp-metrics-recorder.php';
+require_once MACP_PLUGIN_DIR . 'includes/html/processors/class-macp-html-processor.php';
+require_once MACP_PLUGIN_DIR . 'includes/minify/class-macp-minify-html.php';
 
 class MACP_HTML_Cache {
     private $cache_dir;
@@ -14,10 +16,10 @@ class MACP_HTML_Cache {
     private $html_processor;
     private $cache_lifetime = 604800; // 7 days to match Varnish
 
-    public function __construct() {
+    public function __construct($redis = null) {
         $this->cache_dir = WP_CONTENT_DIR . '/cache/macp/';
         $this->excluded_urls = $this->get_excluded_urls();
-        $this->redis = new MACP_Redis();
+        $this->redis = $redis;
         $this->metrics_recorder = new MACP_Metrics_Recorder();
         $this->html_processor = new MACP_HTML_Processor();
         
